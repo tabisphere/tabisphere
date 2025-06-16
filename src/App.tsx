@@ -195,7 +195,8 @@ function App() {
       !event.altKey &&
       !event.ctrlKey &&
       !event.metaKey &&
-      !event.shiftKey
+      !event.shiftKey &&
+      document.activeElement?.tagName !== "INPUT"
     ) {
       document.getElementById("search-button")?.click();
     }
@@ -452,25 +453,11 @@ function App() {
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <form>
-              <Tooltip>
-                <TooltipTrigger>
-                  <DialogTrigger asChild>
-                    <Button
-                      className="h-8"
-                      size={"sm"}
-                      id="create-bookmark-button"
-                    >
-                      New
-                    </Button>
-                  </DialogTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>
-                    New ({navigator.platform.includes("Mac") ? "⌥" : "Alt"}
-                    +E)
-                  </p>
-                </TooltipContent>
-              </Tooltip>
+              <DialogTrigger asChild>
+                <Button className="h-8" size={"sm"} id="create-bookmark-button">
+                  New
+                </Button>
+              </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>Create bookmark</DialogTitle>
