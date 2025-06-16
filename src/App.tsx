@@ -142,17 +142,23 @@ function App() {
       setTabs(tabs);
     });
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      if (changeInfo.status === "complete") {
-        setTabs((prevTabs) => prevTabs.map((t) => (t.id === tabId ? tab : t)));
-      }
+      setTabs((prevTabs) => prevTabs.map((t) => (t.id === tabId ? tab : t)));
+    });
+    chrome.tabs.onRemoved.addListener((tabId) => {
+      setTabs((prevTabs) => prevTabs.filter((t) => t.id !== tabId));
+    });
+    chrome.tabs.onCreated.addListener((tab) => {
+      setTabs((prevTabs) => [...prevTabs, tab]);
     });
     return () => {
       chrome.tabs.onUpdated.removeListener((tabId, changeInfo, tab) => {
-        if (changeInfo.status === "complete") {
-          setTabs((prevTabs) =>
-            prevTabs.map((t) => (t.id === tabId ? tab : t))
-          );
-        }
+        setTabs((prevTabs) => prevTabs.map((t) => (t.id === tabId ? tab : t)));
+      });
+      chrome.tabs.onRemoved.removeListener((tabId) => {
+        setTabs((prevTabs) => prevTabs.filter((t) => t.id !== tabId));
+      });
+      chrome.tabs.onCreated.removeListener((tab) => {
+        setTabs((prevTabs) => [...prevTabs, tab]);
       });
     };
   }, []);
