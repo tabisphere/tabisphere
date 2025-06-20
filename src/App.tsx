@@ -40,6 +40,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./components/ui/tooltip";
+import { isFuzzyMatch } from "./lib/fuzzy-search";
 
 function flattenBookmarks(
   nodes: chrome.bookmarks.BookmarkTreeNode[]
@@ -265,9 +266,12 @@ function App() {
 
   const filteredBookmarks = bookmarks.filter((bookmark) => {
     if (searchValue) {
-      return (
-        bookmark.title?.toLowerCase().includes(searchValue.toLowerCase()) ||
-        bookmark.url?.toLowerCase().includes(searchValue.toLowerCase())
+      return isFuzzyMatch(
+        {
+          title: bookmark.title,
+          url: bookmark.url!,
+        },
+        searchValue
       );
     }
 
