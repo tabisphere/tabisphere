@@ -26,6 +26,7 @@ import {
   PencilIcon,
   Plus,
   SearchIcon,
+  Share,
   Star,
   TrashIcon,
 } from "lucide-react";
@@ -706,6 +707,53 @@ function App() {
                     >
                       <Check className="size-4" /> Mark as{" "}
                       {bookmark.title.endsWith(" [read]") ? "unread" : "read"}
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onSelect={async () => {
+                        const shareData = {
+                          title: bookmark.title.endsWith(" [read]")
+                            ? trimEnd(bookmark.title, " [read]")
+                            : bookmark.title,
+                          url: bookmark.url!,
+                        };
+
+                        // Try to use Web Share API if available
+                        if (
+                          navigator.share &&
+                          navigator.canShare &&
+                          navigator.canShare(shareData)
+                        ) {
+                          try {
+                            await navigator.share(shareData);
+                            toast("Bookmark shared successfully");
+                          } catch (error) {
+                            if (
+                              error instanceof Error &&
+                              error.name !== "AbortError"
+                            ) {
+                              await navigator.clipboard.writeText(
+                                `${shareData.title} - ${shareData.url}`
+                              );
+                              toast("Bookmark copied to clipboard");
+                            }
+                          }
+                        } else {
+                          try {
+                            await navigator.clipboard.writeText(
+                              `${shareData.title} - ${shareData.url}`
+                            );
+                            toast("Bookmark copied to clipboard");
+                          } catch (error) {
+                            toast("Failed to copy bookmark", {
+                              description: "Unable to access clipboard",
+                            });
+                            console.log(error);
+                          }
+                        }
+                      }}
+                    >
+                      <Share className="size-4" />
+                      Share
                     </ContextMenuItem>
                     <ContextMenuItem
                       onSelect={() => {
