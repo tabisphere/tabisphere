@@ -19,6 +19,11 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "./components/ui/context-menu";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "./components/ui/tabs";
 
 import {
   Check,
@@ -43,19 +48,48 @@ import {
 } from "./components/ui/tooltip";
 import { isFuzzyMatch } from "./lib/fuzzy-search";
 
-function flattenBookmarks(
-  nodes: chrome.bookmarks.BookmarkTreeNode[]
-): chrome.bookmarks.BookmarkTreeNode[] {
-  let bookmarks: chrome.bookmarks.BookmarkTreeNode[] = [];
+// New function to get bookmarks with their folder information
+function flattenBookmarksWithFolder(
+  nodes: chrome.bookmarks.BookmarkTreeNode[],
+  folderPath: string[] = []
+): (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[] {
+  let bookmarks: (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[] = [];
   for (const node of nodes) {
     if (node.url) {
-      bookmarks.push(node);
+      bookmarks.push({ ...node, folderPath });
     }
     if (node.children) {
-      bookmarks = bookmarks.concat(flattenBookmarks(node.children));
+      bookmarks = bookmarks.concat(
+        flattenBookmarksWithFolder(node.children, [...folderPath, node.title || ""])
+      );
     }
   }
   return bookmarks;
+}
+
+// Function to extract root-level folders from Bookmarks Bar and Other Bookmarks
+function getRootLevelFolders(nodes: chrome.bookmarks.BookmarkTreeNode[]): string[] {
+  const folders: string[] = [];
+  
+  for (const rootNode of nodes) {
+    if (rootNode.children) {
+      for (const node of rootNode.children) {
+        // Look for "Bookmarks Bar" and "Other Bookmarks"
+        if (node.title === "Bookmarks Bar" || node.title === "Other Bookmarks") {
+          if (node.children) {
+            for (const child of node.children) {
+              // Only add folders (nodes without URLs) and ignore subfolders
+              if (!child.url && child.title) {
+                folders.push(child.title);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return [...new Set(folders)]; // Remove duplicates
 }
 
 function getNumericalFullDate(date: number) {
@@ -99,8 +133,10 @@ function makeGroupHeader(date: number) {
 
 function App() {
   const [bookmarks, setBookmarks] = useState<
-    chrome.bookmarks.BookmarkTreeNode[]
+    (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[]
   >([]);
+  const [bookmarkFolders, setBookmarkFolders] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useLocalStorage<string>("bookmark-active-tab", "All");
   const [titleValue, setTitleValue] = useState("");
   const [urlValue, setUrlValue] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -143,7 +179,7 @@ function App() {
     chrome.tabs.query({ currentWindow: true }, (tabs) => {
       setTabs(tabs);
     });
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    chrome.tabs.onUpdated.addListener((tabId, _changeInfo, tab) => {
       setTabs((prevTabs) => prevTabs.map((t) => (t.id === tabId ? tab : t)));
     });
     chrome.tabs.onRemoved.addListener((tabId) => {
@@ -153,7 +189,7 @@ function App() {
       setTabs((prevTabs) => [...prevTabs, tab]);
     });
     return () => {
-      chrome.tabs.onUpdated.removeListener((tabId, changeInfo, tab) => {
+      chrome.tabs.onUpdated.removeListener((tabId, _changeInfo, tab) => {
         setTabs((prevTabs) => prevTabs.map((t) => (t.id === tabId ? tab : t)));
       });
       chrome.tabs.onRemoved.removeListener((tabId) => {
@@ -219,8 +255,10 @@ function App() {
 
   function getTree() {
     chrome.bookmarks.getTree((bookmarkTreeNodes) => {
-      const allBookmarks = flattenBookmarks(bookmarkTreeNodes);
+      const allBookmarks = flattenBookmarksWithFolder(bookmarkTreeNodes);
+      const folders = getRootLevelFolders(bookmarkTreeNodes);
       setBookmarks(allBookmarks);
+      setBookmarkFolders(folders);
     });
   }
 
@@ -266,6 +304,17 @@ function App() {
   };
 
   const filteredBookmarks = bookmarks.filter((bookmark) => {
+    // First filter by tab/folder
+    if (activeTab !== "All") {
+      // Check if the bookmark is in the selected folder (root level only)
+      const isInFolder = bookmark.folderPath.length >= 3 && 
+                        bookmark.folderPath[2] === activeTab;
+      if (!isInFolder) {
+        return false;
+      }
+    }
+
+    // Then apply search filter
     if (searchValue) {
       return isFuzzyMatch(
         {
@@ -276,6 +325,7 @@ function App() {
       );
     }
 
+    // Finally apply other filters
     if (activeFilters.length === 0) {
       return true;
     }
@@ -554,6 +604,23 @@ function App() {
           </Dialog>
         </div>
       </div>
+      
+      {/* Folder-based Tabs */}
+      {bookmarkFolders.length > 0 && (
+        <div className="w-full mt-3 pl-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${bookmarkFolders.length + 1}, minmax(0, 1fr))` }}>
+              <TabsTrigger value="All">All</TabsTrigger>
+              {bookmarkFolders.map((folder) => (
+                <TabsTrigger key={folder} value={folder}>
+                  {folder}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 w-full mt-3">
         {filteredBookmarks
           .sort((a, b) => sorts.find((s) => s.id === sort)?.sort(a, b) || 0)
