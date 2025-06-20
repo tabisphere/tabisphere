@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cn, focusEndContentEditable } from "./lib/utils";
+import { cn, focusEndContentEditable, trimEnd } from "./lib/utils";
 import {
   Dialog,
   DialogClose,
@@ -591,7 +591,12 @@ function App() {
                         rel="noopener noreferrer"
                         className="group focus:outline-none"
                         onKeyDown={(e) => {
-                          if (e.key === " ") {
+                          if (
+                            e.key === " " &&
+                            !document.activeElement?.classList.contains(
+                              "title-edit-box"
+                            )
+                          ) {
                             e.preventDefault();
                             const element = document.getElementById(
                               `${bookmark.id}-title`
@@ -609,29 +614,58 @@ function App() {
                               }
                             );
                           }
+                          if (!bookmark.title.endsWith(" [read]")) {
+                            chrome.bookmarks.update(bookmark.id!, {
+                              title: `${bookmark.title} [read]`,
+                            });
+                          }
                         }}
                       >
                         <span className="absolute inset-0 hover:bg-foreground/5 rounded-md group-focus-within:bg-foreground/5 group-focus-within:outline-2 transition-all"></span>
-                        <span
-                          className="text-sm font-medium outline-none"
-                          contentEditable
-                          spellCheck={false}
-                          id={`${bookmark.id}-title`}
-                          tabIndex={-1}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.currentTarget.blur();
-                            }
-                          }}
-                          onBlur={(e) => {
-                            chrome.bookmarks.update(bookmark.id!, {
-                              title: e.target.innerText,
-                            });
-                          }}
-                        >
-                          {bookmark.title}
-                        </span>
+                        <div className="flex flex-row gap-1.5 items-center">
+                          <div
+                            className={cn("bg-primary size-2.5 rounded-full", {
+                              hidden: bookmark.title.endsWith(" [read]"),
+                            })}
+                            aria-hidden
+                          ></div>
+                          <span
+                            className="title-edit-box text-sm font-medium outline-none"
+                            contentEditable
+                            spellCheck={false}
+                            id={`${bookmark.id}-title`}
+                            tabIndex={-1}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            onBlur={(e) => {
+                              chrome.bookmarks.get(
+                                bookmark.id!,
+                                (bookmarks) => {
+                                  const priorTitle = bookmarks[0].title;
+                                  const isRead = priorTitle.endsWith(" [read]");
+                                  if (priorTitle !== e.target.innerText) {
+                                    chrome.bookmarks.update(bookmark.id!, {
+                                      title: `${e.target.innerText}${
+                                        isRead &&
+                                        !e.target.innerText.endsWith(" [read]")
+                                          ? " [read]"
+                                          : ""
+                                      }`,
+                                    });
+                                  }
+                                }
+                              );
+                            }}
+                          >
+                            {bookmark.title.endsWith(" [read]")
+                              ? trimEnd(bookmark.title, " [read]")
+                              : bookmark.title}
+                          </span>
+                        </div>
                       </a>
                       <span className="text-sm text-muted-foreground">
                         {new URL(bookmark.url!).hostname}
@@ -652,6 +686,26 @@ function App() {
                     >
                       <PencilIcon className="size-4" />
                       Rename
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onSelect={() => {
+                        chrome.bookmarks.get(bookmark.id!, (bookmarks) => {
+                          const priorTitle = bookmarks[0].title;
+                          const isRead = priorTitle.endsWith(" [read]");
+                          if (isRead) {
+                            chrome.bookmarks.update(bookmark.id!, {
+                              title: priorTitle.replace(" [read]", ""),
+                            });
+                          } else {
+                            chrome.bookmarks.update(bookmark.id!, {
+                              title: `${priorTitle} [read]`,
+                            });
+                          }
+                        });
+                      }}
+                    >
+                      <Check className="size-4" /> Mark as{" "}
+                      {bookmark.title.endsWith(" [read]") ? "unread" : "read"}
                     </ContextMenuItem>
                     <ContextMenuItem
                       onSelect={() => {

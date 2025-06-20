@@ -20,3 +20,10 @@ export function focusEndContentEditable(element: HTMLElement) {
     sel?.addRange(range);
   }
 }
+
+export function trimEnd(mainString: string, stringToTrim: string): string {
+  if (mainString.endsWith(stringToTrim)) {
+    return mainString.slice(0, mainString.length - stringToTrim.length);
+  }
+  return mainString;
+}
