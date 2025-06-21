@@ -795,9 +795,9 @@ function App() {
       {/* Folder-based Tabs */}
       {bookmarkTree.length > 0 && (
         <div className="w-full mt-3 pl-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="flex items-center gap-2">
-              <TabsList className="flex-1">
+          <div className="flex items-center gap-2">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+              <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${bookmarkFolders.length + 1}, minmax(0, 1fr))` }}>
                 <TabsTrigger value="All">All</TabsTrigger>
                 {bookmarkFolders.map((folder) => (
                   <ContextMenu key={folder}>
@@ -821,19 +821,19 @@ function App() {
                   </ContextMenu>
                 ))}
               </TabsList>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setNewFolderName("");
-                  setNewFolderDialogOpen(true);
-                }}
-                className="h-8 px-2"
-              >
-                <Plus className="size-4" />
-              </Button>
-            </div>
-          </Tabs>
+            </Tabs>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setNewFolderName("");
+                setNewFolderDialogOpen(true);
+              }}
+              className="h-8 px-2"
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
 
