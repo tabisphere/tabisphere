@@ -63,7 +63,7 @@ export default function FilterDialog({
               variant="ghost"
               size="sm"
               className={cn(
-                "h-8",
+                "h-8 text-muted-foreground",
                 activeFilters.length > 0 &&
                   "text-sky-700 hover:text-sky-800 dark:text-blue-400 dark:hover:text-blue-300"
               )}

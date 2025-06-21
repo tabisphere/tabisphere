@@ -19,11 +19,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "./components/ui/context-menu";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from "./components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
 
 import {
   Check,
@@ -54,14 +50,19 @@ function flattenBookmarksWithFolder(
   nodes: chrome.bookmarks.BookmarkTreeNode[],
   folderPath: string[] = []
 ): (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[] {
-  let bookmarks: (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[] = [];
+  let bookmarks: (chrome.bookmarks.BookmarkTreeNode & {
+    folderPath: string[];
+  })[] = [];
   for (const node of nodes) {
     if (node.url) {
       bookmarks.push({ ...node, folderPath });
     }
     if (node.children) {
       bookmarks = bookmarks.concat(
-        flattenBookmarksWithFolder(node.children, [...folderPath, node.title || ""])
+        flattenBookmarksWithFolder(node.children, [
+          ...folderPath,
+          node.title || "",
+        ])
       );
     }
   }
@@ -69,14 +70,19 @@ function flattenBookmarksWithFolder(
 }
 
 // Function to extract root-level folders from Bookmarks Bar and Other Bookmarks
-function getRootLevelFolders(nodes: chrome.bookmarks.BookmarkTreeNode[]): string[] {
+function getRootLevelFolders(
+  nodes: chrome.bookmarks.BookmarkTreeNode[]
+): string[] {
   const folders: string[] = [];
-  
+
   for (const rootNode of nodes) {
     if (rootNode.children) {
       for (const node of rootNode.children) {
         // Look for "Bookmarks Bar" and "Other Bookmarks"
-        if (node.title === "Bookmarks Bar" || node.title === "Other Bookmarks") {
+        if (
+          node.title === "Bookmarks Bar" ||
+          node.title === "Other Bookmarks"
+        ) {
           if (node.children) {
             for (const child of node.children) {
               // Only add folders (nodes without URLs) and ignore subfolders
@@ -89,7 +95,7 @@ function getRootLevelFolders(nodes: chrome.bookmarks.BookmarkTreeNode[]): string
       }
     }
   }
-  
+
   return [...new Set(folders)]; // Remove duplicates
 }
 
@@ -137,8 +143,13 @@ function App() {
     (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[]
   >([]);
   const [bookmarkFolders, setBookmarkFolders] = useState<string[]>([]);
-  const [bookmarkTree, setBookmarkTree] = useState<chrome.bookmarks.BookmarkTreeNode[]>([]);
-  const [activeTab, setActiveTab] = useLocalStorage<string>("bookmark-active-tab", "All");
+  const [bookmarkTree, setBookmarkTree] = useState<
+    chrome.bookmarks.BookmarkTreeNode[]
+  >([]);
+  const [activeTab, setActiveTab] = useLocalStorage<string>(
+    "bookmark-active-tab",
+    "All"
+  );
   const [titleValue, setTitleValue] = useState("");
   const [urlValue, setUrlValue] = useState("");
   const [selectedFolder, setSelectedFolder] = useState<string>("");
@@ -148,7 +159,8 @@ function App() {
   const [moveFolderDialogOpen, setMoveFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [renamingFolder, setRenamingFolder] = useState<string>("");
-  const [movingBookmark, setMovingBookmark] = useState<chrome.bookmarks.BookmarkTreeNode | null>(null);
+  const [movingBookmark, setMovingBookmark] =
+    useState<chrome.bookmarks.BookmarkTreeNode | null>(null);
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [tabs, setTabs] = useState<chrome.tabs.Tab[]>([]);
@@ -317,8 +329,8 @@ function App() {
     // First filter by tab/folder
     if (activeTab !== "All") {
       // Check if the bookmark is in the selected folder (root level only)
-      const isInFolder = bookmark.folderPath.length >= 3 && 
-                        bookmark.folderPath[2] === activeTab;
+      const isInFolder =
+        bookmark.folderPath.length >= 3 && bookmark.folderPath[2] === activeTab;
       if (!isInFolder) {
         return false;
       }
@@ -378,11 +390,16 @@ function App() {
 
   // Get the folder ID for a given folder name
   function getFolderId(folderName: string): string | null {
-    const findFolderInTree = (nodes: chrome.bookmarks.BookmarkTreeNode[]): string | null => {
+    const findFolderInTree = (
+      nodes: chrome.bookmarks.BookmarkTreeNode[]
+    ): string | null => {
       for (const rootNode of nodes) {
         if (rootNode.children) {
           for (const node of rootNode.children) {
-            if (node.title === "Bookmarks Bar" || node.title === "Other Bookmarks") {
+            if (
+              node.title === "Bookmarks Bar" ||
+              node.title === "Other Bookmarks"
+            ) {
               if (node.children) {
                 for (const child of node.children) {
                   if (!child.url && child.title === folderName) {
@@ -396,13 +413,15 @@ function App() {
       }
       return null;
     };
-    
+
     return findFolderInTree(bookmarkTree);
   }
 
   // Get the default parent folder ID (Bookmarks Bar)
   function getDefaultParentId(): string | null {
-    const findBookmarksBar = (nodes: chrome.bookmarks.BookmarkTreeNode[]): string | null => {
+    const findBookmarksBar = (
+      nodes: chrome.bookmarks.BookmarkTreeNode[]
+    ): string | null => {
       for (const rootNode of nodes) {
         if (rootNode.children) {
           for (const node of rootNode.children) {
@@ -414,7 +433,7 @@ function App() {
       }
       return null;
     };
-    
+
     return findBookmarksBar(bookmarkTree);
   }
 
@@ -422,19 +441,22 @@ function App() {
   function createFolder(name: string) {
     const parentId = getDefaultParentId();
     if (parentId) {
-      chrome.bookmarks.create({
-        parentId: parentId,
-        title: name,
-      }).then(() => {
-        toast("Folder created successfully", {
-          description: `Created folder "${name}"`,
+      chrome.bookmarks
+        .create({
+          parentId: parentId,
+          title: name,
+        })
+        .then(() => {
+          toast("Folder created successfully", {
+            description: `Created folder "${name}"`,
+          });
+          getTree(); // Refresh the tree
+        })
+        .catch((error) => {
+          toast("Error creating folder", {
+            description: error.message,
+          });
         });
-        getTree(); // Refresh the tree
-      }).catch((error) => {
-        toast("Error creating folder", {
-          description: error.message,
-        });
-      });
     }
   }
 
@@ -442,32 +464,40 @@ function App() {
   function renameFolder(oldName: string, newName: string) {
     const folderId = getFolderId(oldName);
     if (folderId) {
-      chrome.bookmarks.update(folderId, {
-        title: newName,
-      }).then(() => {
-        toast("Folder renamed successfully", {
-          description: `Renamed "${oldName}" to "${newName}"`,
+      chrome.bookmarks
+        .update(folderId, {
+          title: newName,
+        })
+        .then(() => {
+          toast("Folder renamed successfully", {
+            description: `Renamed "${oldName}" to "${newName}"`,
+          });
+          // If the renamed folder was the active tab, update it
+          if (activeTab === oldName) {
+            setActiveTab(newName);
+          }
+          getTree(); // Refresh the tree
+        })
+        .catch((error) => {
+          toast("Error renaming folder", {
+            description: error.message,
+          });
         });
-        // If the renamed folder was the active tab, update it
-        if (activeTab === oldName) {
-          setActiveTab(newName);
-        }
-        getTree(); // Refresh the tree
-      }).catch((error) => {
-        toast("Error renaming folder", {
-          description: error.message,
-        });
-      });
     }
   }
 
   // Move bookmark to a different folder
   function moveBookmark(bookmarkId: string, targetFolderName: string) {
     let parentId: string | null = null;
-    
-    if (targetFolderName === "Bookmarks Bar" || targetFolderName === "Other Bookmarks") {
+
+    if (
+      targetFolderName === "Bookmarks Bar" ||
+      targetFolderName === "Other Bookmarks"
+    ) {
       // Moving to root level
-      const findRootFolder = (nodes: chrome.bookmarks.BookmarkTreeNode[]): string | null => {
+      const findRootFolder = (
+        nodes: chrome.bookmarks.BookmarkTreeNode[]
+      ): string | null => {
         for (const rootNode of nodes) {
           if (rootNode.children) {
             for (const node of rootNode.children) {
@@ -486,33 +516,81 @@ function App() {
     }
 
     if (parentId) {
-      chrome.bookmarks.move(bookmarkId, {
-        parentId: parentId,
-      }).then(() => {
-        toast("Bookmark moved successfully", {
-          description: `Moved to "${targetFolderName}"`,
+      chrome.bookmarks
+        .move(bookmarkId, {
+          parentId: parentId,
+        })
+        .then(() => {
+          toast("Bookmark moved successfully", {
+            description: `Moved to "${targetFolderName}"`,
+          });
+          getTree(); // Refresh the tree
+        })
+        .catch((error) => {
+          toast("Error moving bookmark", {
+            description: error.message,
+          });
         });
-        getTree(); // Refresh the tree
-      }).catch((error) => {
-        toast("Error moving bookmark", {
-          description: error.message,
-        });
-      });
     }
   }
 
   return (
-    <div className="flex-col items-center justify-center min-h-screen max-w-2xl mx-auto p-12 px-16">
+    <div className="flex-col items-center justify-center min-h-screen max-w-3xl mx-auto p-12 px-16">
       <div className="flex items-center gap-2 justify-between w-full">
         <h1 className="text-2xl font-semibold pl-2 select-none">Home</h1>
       </div>
       <div className="flex items-center gap-2 justify-between w-full pl-2 pt-2 sticky top-0 bg-background z-40">
-        <div className="flex items-center gap-2">
-          <Star className="size-4 text-muted-foreground" fill="currentColor" />
-          <span className="text-sm font-normal select-none text-muted-foreground">
-            Bookmarks
-          </span>
-        </div>
+        {bookmarkTree.length > 0 ? (
+          <div className="w-full">
+            <div className="flex items-center justify-start gap-2 w-full">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList>
+                  <TabsTrigger value="All">All</TabsTrigger>
+                  {bookmarkFolders.map((folder) => (
+                    <ContextMenu key={folder}>
+                      <ContextMenuTrigger asChild>
+                        <TabsTrigger value={folder}>{folder}</TabsTrigger>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem
+                          onSelect={() => {
+                            setRenamingFolder(folder);
+                            setNewFolderName(folder);
+                            setRenameFolderDialogOpen(true);
+                          }}
+                        >
+                          <PencilIcon className="size-4" />
+                          Rename folder
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setNewFolderName("");
+                  setNewFolderDialogOpen(true);
+                }}
+                className="size-8 p-1 text-muted-foreground rounded-full"
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Star
+              className="size-4 text-muted-foreground"
+              fill="currentColor"
+            />
+            <span className="text-sm font-normal select-none text-muted-foreground">
+              Bookmarks
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0">
             <div className="flex items-center">
@@ -520,7 +598,12 @@ function App() {
                 <Tooltip>
                   <TooltipTrigger>
                     <DialogTrigger asChild>
-                      <Button variant="ghost" size="icon" id="open-tabs-button">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        id="open-tabs-button"
+                        className="text-muted-foreground"
+                      >
                         <ListIcon className="size-4" />
                       </Button>
                     </DialogTrigger>
@@ -602,6 +685,7 @@ function App() {
                     variant="ghost"
                     size="icon"
                     id="search-button"
+                    className="text-muted-foreground"
                     onClick={() => setSearchShown(!searchShown)}
                   >
                     <SearchIcon className="size-4" />
@@ -725,11 +809,16 @@ function App() {
 
                       // Determine the parent folder ID
                       let parentId: string | null = null;
-                      if (selectedFolder === "" || selectedFolder === "Bookmarks Bar") {
+                      if (
+                        selectedFolder === "" ||
+                        selectedFolder === "Bookmarks Bar"
+                      ) {
                         parentId = getDefaultParentId(); // Bookmarks Bar
                       } else if (selectedFolder === "Other Bookmarks") {
                         // Find Other Bookmarks ID
-                        const findOtherBookmarks = (nodes: chrome.bookmarks.BookmarkTreeNode[]): string | null => {
+                        const findOtherBookmarks = (
+                          nodes: chrome.bookmarks.BookmarkTreeNode[]
+                        ): string | null => {
                           for (const rootNode of nodes) {
                             if (rootNode.children) {
                               for (const node of rootNode.children) {
@@ -791,51 +880,6 @@ function App() {
           </Dialog>
         </div>
       </div>
-      
-      {/* Folder-based Tabs */}
-      {bookmarkTree.length > 0 && (
-        <div className="w-full mt-3 pl-2">
-          <div className="flex items-center gap-2">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-              <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${bookmarkFolders.length + 1}, minmax(0, 1fr))` }}>
-                <TabsTrigger value="All">All</TabsTrigger>
-                {bookmarkFolders.map((folder) => (
-                  <ContextMenu key={folder}>
-                    <ContextMenuTrigger asChild>
-                      <TabsTrigger value={folder}>
-                        {folder}
-                      </TabsTrigger>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem
-                        onSelect={() => {
-                          setRenamingFolder(folder);
-                          setNewFolderName(folder);
-                          setRenameFolderDialogOpen(true);
-                        }}
-                      >
-                        <PencilIcon className="size-4" />
-                        Rename Folder
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ))}
-              </TabsList>
-            </Tabs>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setNewFolderName("");
-                setNewFolderDialogOpen(true);
-              }}
-              className="h-8 px-2"
-            >
-              <Plus className="size-4" />
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="flex flex-col gap-2 w-full mt-3">
         {filteredBookmarks
@@ -999,7 +1043,7 @@ function App() {
                       }}
                     >
                       <FolderOpen className="size-4" />
-                      Move to Folder
+                      Move to folder
                     </ContextMenuItem>
                     <ContextMenuItem
                       onSelect={async () => {
@@ -1144,7 +1188,10 @@ function App() {
       </Dialog>
 
       {/* Rename Folder Dialog */}
-      <Dialog open={renameFolderDialogOpen} onOpenChange={setRenameFolderDialogOpen}>
+      <Dialog
+        open={renameFolderDialogOpen}
+        onOpenChange={setRenameFolderDialogOpen}
+      >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Rename Folder</DialogTitle>
@@ -1162,7 +1209,10 @@ function App() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    if (newFolderName.trim() && newFolderName.trim() !== renamingFolder) {
+                    if (
+                      newFolderName.trim() &&
+                      newFolderName.trim() !== renamingFolder
+                    ) {
                       renameFolder(renamingFolder, newFolderName.trim());
                       setRenameFolderDialogOpen(false);
                       setNewFolderName("");
@@ -1176,15 +1226,25 @@ function App() {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" onClick={() => {
-                setNewFolderName("");
-                setRenamingFolder("");
-              }}>Cancel</Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setNewFolderName("");
+                  setRenamingFolder("");
+                }}
+              >
+                Cancel
+              </Button>
             </DialogClose>
             <Button
-              disabled={!newFolderName.trim() || newFolderName.trim() === renamingFolder}
+              disabled={
+                !newFolderName.trim() || newFolderName.trim() === renamingFolder
+              }
               onClick={() => {
-                if (newFolderName.trim() && newFolderName.trim() !== renamingFolder) {
+                if (
+                  newFolderName.trim() &&
+                  newFolderName.trim() !== renamingFolder
+                ) {
                   renameFolder(renamingFolder, newFolderName.trim());
                   setRenameFolderDialogOpen(false);
                   setNewFolderName("");
@@ -1199,7 +1259,10 @@ function App() {
       </Dialog>
 
       {/* Move Bookmark Dialog */}
-      <Dialog open={moveFolderDialogOpen} onOpenChange={setMoveFolderDialogOpen}>
+      <Dialog
+        open={moveFolderDialogOpen}
+        onOpenChange={setMoveFolderDialogOpen}
+      >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Move Bookmark</DialogTitle>
@@ -1228,10 +1291,15 @@ function App() {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" onClick={() => {
-                setSelectedFolder("");
-                setMovingBookmark(null);
-              }}>Cancel</Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSelectedFolder("");
+                  setMovingBookmark(null);
+                }}
+              >
+                Cancel
+              </Button>
             </DialogClose>
             <Button
               onClick={() => {
