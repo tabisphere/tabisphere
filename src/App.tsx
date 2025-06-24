@@ -101,6 +101,9 @@ function getRootLevelFolders(
 
 function getNumericalFullDate(date: number) {
   const dateObj = new Date(date);
+  if (dateObj.toString() === "Invalid Date") {
+    return 0;
+  }
   const day = dateObj.getDate();
   const month = dateObj.getMonth() + 1;
   const year = dateObj.getFullYear();
@@ -152,7 +155,8 @@ function App() {
   );
   const [titleValue, setTitleValue] = useState("");
   const [urlValue, setUrlValue] = useState("");
-  const [selectedFolder, setSelectedFolder] = useState<string>("");
+  const [selectedFolder, setSelectedFolder] =
+    useState<string>("Other Bookmarks");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
@@ -539,7 +543,7 @@ function App() {
       <div className="flex items-center gap-2 justify-between w-full">
         <h1 className="text-2xl font-semibold pl-2 select-none">Home</h1>
       </div>
-      <div className="flex items-center gap-2 justify-between w-full pl-2 pt-2 sticky top-0 bg-background z-40">
+      <div className="flex items-center gap-2 justify-between w-full pl-2 py-2 sticky top-0 bg-background z-40">
         {bookmarkTree.length > 0 ? (
           <div className="w-full">
             <div className="flex items-center justify-start gap-2 w-full">
@@ -783,8 +787,8 @@ function App() {
                       value={selectedFolder}
                       onChange={(e) => setSelectedFolder(e.target.value)}
                     >
-                      <option value="">Bookmarks Bar</option>
                       <option value="Other Bookmarks">Other Bookmarks</option>
+                      <option value="Bookmarks Bar">Bookmarks Bar</option>
                       {bookmarkFolders.map((folder) => (
                         <option key={folder} value={folder}>
                           {folder}
@@ -882,259 +886,285 @@ function App() {
       </div>
 
       <div className="flex flex-col gap-2 w-full mt-3">
-        {filteredBookmarks
-          .sort((a, b) => sorts.find((s) => s.id === sort)?.sort(a, b) || 0)
-          .map((bookmark, index) => (
-            <div
-              key={bookmark.id}
-              className="flex flex-row gap-1 w-full select-none"
-            >
-              <div className="flex flex-col flex-1">
-                <span
-                  className={cn(
-                    "text-sm text-muted-foreground font-medium",
-                    index == 0
-                      ? "mb-1 pl-2"
-                      : getNumericalFullDate(
-                          filteredBookmarks[index - 1].dateAdded!
-                        ) == getNumericalFullDate(bookmark.dateAdded!)
-                      ? ""
-                      : "mb-1 pl-2"
-                  )}
-                >
-                  {index == 0
-                    ? makeGroupHeader(bookmark.dateAdded!)
-                    : getNumericalFullDate(
-                        filteredBookmarks[index - 1].dateAdded!
-                      ) == getNumericalFullDate(bookmark.dateAdded!)
-                    ? ""
-                    : makeGroupHeader(bookmark.dateAdded!)}
+        {(() => {
+          const sortedBookmarks = filteredBookmarks.sort(
+            (a, b) => sorts.find((s) => s.id === sort)?.sort(a, b) || 0
+          );
+
+          // Group bookmarks by date
+          const groupedBookmarks = sortedBookmarks.reduce(
+            (groups, bookmark) => {
+              const dateKey = getNumericalFullDate(bookmark.dateAdded!);
+              if (!groups[dateKey]) {
+                groups[dateKey] = [];
+              }
+              groups[dateKey].push(bookmark);
+              return groups;
+            },
+            {} as Record<number, typeof sortedBookmarks>
+          );
+
+          // Render groups in date order
+          return Object.entries(groupedBookmarks)
+            .sort(([a], [b]) => parseInt(b) - parseInt(a)) // Sort by date descending
+            .map(([dateKey, bookmarksInGroup]) => (
+              <div key={dateKey} className="flex flex-col gap-2">
+                <span className="text-sm text-muted-foreground font-medium mb-1 pl-2">
+                  {makeGroupHeader(bookmarksInGroup[0].dateAdded!)}
                 </span>
-                <ContextMenu>
-                  <ContextMenuTrigger>
-                    <div className="isolate relative flex flex-col p-2">
-                      <a
-                        href={bookmark.url!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group focus:outline-none"
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === " " &&
-                            !document.activeElement?.classList.contains(
-                              "title-edit-box"
-                            )
-                          ) {
-                            e.preventDefault();
-                            const element = document.getElementById(
-                              `${bookmark.id}-title`
-                            );
-                            focusEndContentEditable(element!);
-                          }
-                        }}
-                        onClick={(e) => {
-                          if (tabs.some((tab) => tab.url === bookmark.url)) {
-                            e.preventDefault();
-                            chrome.tabs.update(
-                              tabs.find((tab) => tab.url === bookmark.url)!.id!,
-                              {
-                                active: true,
-                              }
-                            );
-                          }
-                          if (!bookmark.title.endsWith(" [read]")) {
-                            chrome.bookmarks.update(bookmark.id!, {
-                              title: `${bookmark.title} [read]`,
-                            });
-                          }
-                        }}
-                      >
-                        <span className="absolute inset-0 hover:bg-foreground/5 rounded-md group-focus-within:bg-foreground/5 group-focus-within:outline-2 transition-all"></span>
-                        <div className="flex flex-row gap-1.5 items-center">
-                          <div
-                            className={cn("bg-primary size-2.5 rounded-full", {
-                              hidden: bookmark.title.endsWith(" [read]"),
-                            })}
-                            aria-hidden
-                          ></div>
-                          <span
-                            className="title-edit-box text-sm font-medium outline-none"
-                            contentEditable
-                            spellCheck={false}
-                            id={`${bookmark.id}-title`}
-                            tabIndex={-1}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                e.currentTarget.blur();
-                              }
+                {bookmarksInGroup.map((bookmark) => (
+                  <div
+                    key={bookmark.id}
+                    className="flex flex-row gap-1 w-full select-none"
+                  >
+                    <div className="flex flex-col flex-1">
+                      <ContextMenu>
+                        <ContextMenuTrigger>
+                          <div className="isolate relative flex flex-col p-2">
+                            <a
+                              href={bookmark.url!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group focus:outline-none"
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === " " &&
+                                  !document.activeElement?.classList.contains(
+                                    "title-edit-box"
+                                  )
+                                ) {
+                                  e.preventDefault();
+                                  const element = document.getElementById(
+                                    `${bookmark.id}-title`
+                                  );
+                                  focusEndContentEditable(element!);
+                                }
+                              }}
+                              onClick={(e) => {
+                                if (
+                                  tabs.some((tab) => tab.url === bookmark.url)
+                                ) {
+                                  e.preventDefault();
+                                  chrome.tabs.update(
+                                    tabs.find(
+                                      (tab) => tab.url === bookmark.url
+                                    )!.id!,
+                                    {
+                                      active: true,
+                                    }
+                                  );
+                                }
+                                if (!bookmark.title.endsWith(" [read]")) {
+                                  chrome.bookmarks.update(bookmark.id!, {
+                                    title: `${bookmark.title} [read]`,
+                                  });
+                                }
+                              }}
+                            >
+                              <span className="absolute inset-0 hover:bg-foreground/5 rounded-md group-focus-within:bg-foreground/5 group-focus-within:outline-2 transition-all"></span>
+                              <div className="flex flex-row gap-1.5 items-center">
+                                <div
+                                  className={cn(
+                                    "bg-primary size-2.5 rounded-full",
+                                    {
+                                      hidden:
+                                        bookmark.title.endsWith(" [read]"),
+                                    }
+                                  )}
+                                  aria-hidden
+                                ></div>
+                                <span
+                                  className="title-edit-box text-sm font-medium outline-none"
+                                  contentEditable
+                                  spellCheck={false}
+                                  id={`${bookmark.id}-title`}
+                                  tabIndex={-1}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      e.currentTarget.blur();
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    chrome.bookmarks.get(
+                                      bookmark.id!,
+                                      (bookmarks) => {
+                                        const priorTitle = bookmarks[0].title;
+                                        const isRead =
+                                          priorTitle.endsWith(" [read]");
+                                        if (priorTitle !== e.target.innerText) {
+                                          chrome.bookmarks.update(
+                                            bookmark.id!,
+                                            {
+                                              title: `${e.target.innerText}${
+                                                isRead &&
+                                                !e.target.innerText.endsWith(
+                                                  " [read]"
+                                                )
+                                                  ? " [read]"
+                                                  : ""
+                                              }`,
+                                            }
+                                          );
+                                        }
+                                      }
+                                    );
+                                  }}
+                                >
+                                  {bookmark.title.endsWith(" [read]")
+                                    ? trimEnd(bookmark.title, " [read]")
+                                    : bookmark.title}
+                                </span>
+                              </div>
+                            </a>
+                            <span className="text-sm text-muted-foreground">
+                              {new URL(bookmark.url!).hostname}
+                              {new URL(bookmark.url!).pathname}
+                            </span>
+                          </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem
+                            onSelect={() => {
+                              setTimeout(() => {
+                                const element = document.getElementById(
+                                  `${bookmark.id}-title`
+                                );
+                                focusEndContentEditable(element!);
+                              }, 200);
                             }}
-                            onBlur={(e) => {
+                          >
+                            <PencilIcon className="size-4" />
+                            Rename
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
                               chrome.bookmarks.get(
                                 bookmark.id!,
                                 (bookmarks) => {
                                   const priorTitle = bookmarks[0].title;
                                   const isRead = priorTitle.endsWith(" [read]");
-                                  if (priorTitle !== e.target.innerText) {
+                                  if (isRead) {
                                     chrome.bookmarks.update(bookmark.id!, {
-                                      title: `${e.target.innerText}${
-                                        isRead &&
-                                        !e.target.innerText.endsWith(" [read]")
-                                          ? " [read]"
-                                          : ""
-                                      }`,
+                                      title: priorTitle.replace(" [read]", ""),
+                                    });
+                                  } else {
+                                    chrome.bookmarks.update(bookmark.id!, {
+                                      title: `${priorTitle} [read]`,
                                     });
                                   }
                                 }
                               );
                             }}
                           >
+                            <Check className="size-4" /> Mark as{" "}
                             {bookmark.title.endsWith(" [read]")
-                              ? trimEnd(bookmark.title, " [read]")
-                              : bookmark.title}
-                          </span>
-                        </div>
-                      </a>
-                      <span className="text-sm text-muted-foreground">
-                        {new URL(bookmark.url!).hostname}
-                        {new URL(bookmark.url!).pathname}
-                      </span>
-                    </div>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent>
-                    <ContextMenuItem
-                      onSelect={() => {
-                        setTimeout(() => {
-                          const element = document.getElementById(
-                            `${bookmark.id}-title`
-                          );
-                          focusEndContentEditable(element!);
-                        }, 200);
-                      }}
-                    >
-                      <PencilIcon className="size-4" />
-                      Rename
-                    </ContextMenuItem>
-                    <ContextMenuItem
-                      onSelect={() => {
-                        chrome.bookmarks.get(bookmark.id!, (bookmarks) => {
-                          const priorTitle = bookmarks[0].title;
-                          const isRead = priorTitle.endsWith(" [read]");
-                          if (isRead) {
-                            chrome.bookmarks.update(bookmark.id!, {
-                              title: priorTitle.replace(" [read]", ""),
-                            });
-                          } else {
-                            chrome.bookmarks.update(bookmark.id!, {
-                              title: `${priorTitle} [read]`,
-                            });
-                          }
-                        });
-                      }}
-                    >
-                      <Check className="size-4" /> Mark as{" "}
-                      {bookmark.title.endsWith(" [read]") ? "unread" : "read"}
-                    </ContextMenuItem>
-                    <ContextMenuItem
-                      onSelect={() => {
-                        setMovingBookmark(bookmark);
-                        setSelectedFolder("Bookmarks Bar");
-                        setMoveFolderDialogOpen(true);
-                      }}
-                    >
-                      <FolderOpen className="size-4" />
-                      Move to folder
-                    </ContextMenuItem>
-                    <ContextMenuItem
-                      onSelect={async () => {
-                        const shareData = {
-                          title: bookmark.title.endsWith(" [read]")
-                            ? trimEnd(bookmark.title, " [read]")
-                            : bookmark.title,
-                          url: bookmark.url!,
-                        };
+                              ? "unread"
+                              : "read"}
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
+                              setMovingBookmark(bookmark);
+                              setSelectedFolder("Bookmarks Bar");
+                              setMoveFolderDialogOpen(true);
+                            }}
+                          >
+                            <FolderOpen className="size-4" />
+                            Move to folder
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={async () => {
+                              const shareData = {
+                                title: bookmark.title.endsWith(" [read]")
+                                  ? trimEnd(bookmark.title, " [read]")
+                                  : bookmark.title,
+                                url: bookmark.url!,
+                              };
 
-                        // Try to use Web Share API if available
-                        if (
-                          navigator.share &&
-                          navigator.canShare &&
-                          navigator.canShare(shareData)
-                        ) {
-                          try {
-                            await navigator.share(shareData);
-                            toast("Bookmark shared successfully");
-                          } catch (error) {
-                            if (
-                              error instanceof Error &&
-                              error.name !== "AbortError"
-                            ) {
-                              await navigator.clipboard.writeText(
-                                `${shareData.title} - ${shareData.url}`
-                              );
-                              toast("Bookmark copied to clipboard");
-                            }
-                          }
-                        } else {
-                          try {
-                            await navigator.clipboard.writeText(
-                              `${shareData.title} - ${shareData.url}`
-                            );
-                            toast("Bookmark copied to clipboard");
-                          } catch (error) {
-                            toast("Failed to copy bookmark", {
-                              description: "Unable to access clipboard",
-                            });
-                            console.log(error);
-                          }
-                        }
-                      }}
-                    >
-                      <Share className="size-4" />
-                      Share
-                    </ContextMenuItem>
-                    <ContextMenuItem
-                      onSelect={() => {
-                        try {
-                          chrome.bookmarks
-                            .remove(bookmark.id!)
-                            .then(() => {
-                              toast("Bookmark has been deleted", {
-                                description: bookmark.url,
-                                action: {
-                                  label: "Undo",
-                                  onClick: () => {
-                                    chrome.bookmarks.create({
-                                      url: bookmark.url!,
-                                      title: bookmark.title!,
-                                      parentId: bookmark.parentId!,
+                              // Try to use Web Share API if available
+                              if (
+                                navigator.share &&
+                                navigator.canShare &&
+                                navigator.canShare(shareData)
+                              ) {
+                                try {
+                                  await navigator.share(shareData);
+                                  toast("Bookmark shared successfully");
+                                } catch (error) {
+                                  if (
+                                    error instanceof Error &&
+                                    error.name !== "AbortError"
+                                  ) {
+                                    await navigator.clipboard.writeText(
+                                      `${shareData.title} - ${shareData.url}`
+                                    );
+                                    toast("Bookmark copied to clipboard");
+                                  }
+                                }
+                              } else {
+                                try {
+                                  await navigator.clipboard.writeText(
+                                    `${shareData.title} - ${shareData.url}`
+                                  );
+                                  toast("Bookmark copied to clipboard");
+                                } catch (error) {
+                                  toast("Failed to copy bookmark", {
+                                    description: "Unable to access clipboard",
+                                  });
+                                  console.log(error);
+                                }
+                              }
+                            }}
+                          >
+                            <Share className="size-4" />
+                            Share
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
+                              try {
+                                chrome.bookmarks
+                                  .remove(bookmark.id!)
+                                  .then(() => {
+                                    toast("Bookmark has been deleted", {
+                                      description: bookmark.url,
+                                      action: {
+                                        label: "Undo",
+                                        onClick: () => {
+                                          chrome.bookmarks.create({
+                                            url: bookmark.url!,
+                                            title: bookmark.title!,
+                                            parentId: bookmark.parentId!,
+                                          });
+                                        },
+                                      },
                                     });
-                                  },
-                                },
-                              });
-                            })
-                            .catch((error) => {
-                              toast("Error deleting bookmark", {
-                                description: error.message,
-                              });
-                            });
-                        } catch (error) {
-                          toast("Error deleting bookmark", {
-                            description:
-                              error instanceof Error
-                                ? error.message
-                                : "Unknown error",
-                          });
-                        }
-                      }}
-                      variant="destructive"
-                    >
-                      <TrashIcon /> Delete
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
+                                  })
+                                  .catch((error) => {
+                                    toast("Error deleting bookmark", {
+                                      description: error.message,
+                                    });
+                                  });
+                              } catch (error) {
+                                toast("Error deleting bookmark", {
+                                  description:
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Unknown error",
+                                });
+                              }
+                            }}
+                            variant="destructive"
+                          >
+                            <TrashIcon /> Delete
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          ))}
+            ));
+        })()}
       </div>
 
       {/* New Folder Dialog */}
@@ -1265,22 +1295,22 @@ function App() {
       >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Move Bookmark</DialogTitle>
+            <DialogTitle>Move bookmark</DialogTitle>
             <DialogDescription>
               Choose where to move "{movingBookmark?.title}".
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-3">
-              <Label htmlFor="move-folder-select">Destination Folder</Label>
+              <Label htmlFor="move-folder-select">Destination folder</Label>
               <select
                 id="move-folder-select"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 value={selectedFolder}
                 onChange={(e) => setSelectedFolder(e.target.value)}
               >
-                <option value="Bookmarks Bar">Bookmarks Bar</option>
                 <option value="Other Bookmarks">Other Bookmarks</option>
+                <option value="Bookmarks Bar">Bookmarks Bar</option>
                 {bookmarkFolders.map((folder) => (
                   <option key={folder} value={folder}>
                     {folder}
@@ -1311,7 +1341,7 @@ function App() {
                 }
               }}
             >
-              Move Bookmark
+              Move bookmark
             </Button>
           </DialogFooter>
         </DialogContent>
