@@ -120,7 +120,7 @@ export const filters = {
     ],
   },
   date: {
-    name: "Date Added",
+    name: "Date added",
     id: "date",
     options: [
       {
