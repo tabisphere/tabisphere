@@ -63,7 +63,7 @@ export default function FilterDialog({
               variant="ghost"
               size="sm"
               className={cn(
-                "h-8",
+                "h-8 text-muted-foreground",
                 activeFilters.length > 0 &&
                   "text-sky-700 hover:text-sky-800 dark:text-blue-400 dark:hover:text-blue-300"
               )}
@@ -161,11 +161,11 @@ export default function FilterDialog({
 
           <div className="border-t pt-4">
             <Label className="text-base">
-              {editingFilterId ? "Edit Filter" : "Add New Filter"}
+              {editingFilterId ? "Edit filter" : "Add new filter"}
             </Label>
             <div className="space-y-3 mt-2">
               <div className="space-y-2">
-                <Label>Filter Category</Label>
+                <Label>Filter category</Label>
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={currentFilter.category}
@@ -187,7 +187,7 @@ export default function FilterDialog({
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Filter Type</Label>
+                <Label>Filter type</Label>
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={currentFilter.type}
@@ -364,7 +364,7 @@ export default function FilterDialog({
                   }
                   className="flex-1"
                 >
-                  {editingFilterId ? "Update Filter" : "Add Filter"}
+                  {editingFilterId ? "Update filter" : "Add filter"}
                 </Button>
               </div>
             </div>
@@ -378,7 +378,7 @@ export default function FilterDialog({
               setActiveFilters([]);
             }}
           >
-            Clear All Filters
+            Clear all filters
           </Button>
           <DialogClose asChild>
             <Button>Done</Button>
