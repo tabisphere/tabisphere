@@ -44,60 +44,16 @@ import {
   TooltipTrigger,
 } from "./components/ui/tooltip";
 import { isFuzzyMatch } from "./lib/fuzzy-search";
-
-// New function to get bookmarks with their folder information
-function flattenBookmarksWithFolder(
-  nodes: chrome.bookmarks.BookmarkTreeNode[],
-  folderPath: string[] = []
-): (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[] {
-  let bookmarks: (chrome.bookmarks.BookmarkTreeNode & {
-    folderPath: string[];
-  })[] = [];
-  for (const node of nodes) {
-    if (node.url) {
-      bookmarks.push({ ...node, folderPath });
-    }
-    if (node.children) {
-      bookmarks = bookmarks.concat(
-        flattenBookmarksWithFolder(node.children, [
-          ...folderPath,
-          node.title || "",
-        ])
-      );
-    }
-  }
-  return bookmarks;
-}
-
-// Function to extract root-level folders from Bookmarks Bar and Other Bookmarks
-function getRootLevelFolders(
-  nodes: chrome.bookmarks.BookmarkTreeNode[]
-): string[] {
-  const folders: string[] = [];
-
-  for (const rootNode of nodes) {
-    if (rootNode.children) {
-      for (const node of rootNode.children) {
-        // Look for "Bookmarks Bar" and "Other Bookmarks"
-        if (
-          node.title === "Bookmarks Bar" ||
-          node.title === "Other Bookmarks"
-        ) {
-          if (node.children) {
-            for (const child of node.children) {
-              // Only add folders (nodes without URLs) and ignore subfolders
-              if (!child.url && child.title) {
-                folders.push(child.title);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return [...new Set(folders)]; // Remove duplicates
-}
+import {
+  type BookmarkFolder,
+  type BookmarkWithFolder,
+  flattenBookmarksWithFolder,
+  getRootLevelFolders,
+  getFolderId,
+  getBookmarksBarId,
+  getSpecialFolders,
+  getFolderByType,
+} from "./lib/bookmark-utils";
 
 function getNumericalFullDate(date: number) {
   const dateObj = new Date(date);
@@ -142,10 +98,8 @@ function makeGroupHeader(date: number) {
 }
 
 function App() {
-  const [bookmarks, setBookmarks] = useState<
-    (chrome.bookmarks.BookmarkTreeNode & { folderPath: string[] })[]
-  >([]);
-  const [bookmarkFolders, setBookmarkFolders] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkWithFolder[]>([]);
+  const [bookmarkFolders, setBookmarkFolders] = useState<BookmarkFolder[]>([]);
   const [bookmarkTree, setBookmarkTree] = useState<
     chrome.bookmarks.BookmarkTreeNode[]
   >([]);
@@ -155,8 +109,7 @@ function App() {
   );
   const [titleValue, setTitleValue] = useState("");
   const [urlValue, setUrlValue] = useState("");
-  const [selectedFolder, setSelectedFolder] =
-    useState<string>("Other Bookmarks");
+  const [selectedFolder, setSelectedFolder] = useState<string>("other");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [renameFolderDialogOpen, setRenameFolderDialogOpen] = useState(false);
@@ -392,58 +345,9 @@ function App() {
     return activeFilters.every(checkFilter);
   });
 
-  // Get the folder ID for a given folder name
-  function getFolderId(folderName: string): string | null {
-    const findFolderInTree = (
-      nodes: chrome.bookmarks.BookmarkTreeNode[]
-    ): string | null => {
-      for (const rootNode of nodes) {
-        if (rootNode.children) {
-          for (const node of rootNode.children) {
-            if (
-              node.title === "Bookmarks Bar" ||
-              node.title === "Other Bookmarks"
-            ) {
-              if (node.children) {
-                for (const child of node.children) {
-                  if (!child.url && child.title === folderName) {
-                    return child.id!;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      return null;
-    };
-
-    return findFolderInTree(bookmarkTree);
-  }
-
-  // Get the default parent folder ID (Bookmarks Bar)
-  function getDefaultParentId(): string | null {
-    const findBookmarksBar = (
-      nodes: chrome.bookmarks.BookmarkTreeNode[]
-    ): string | null => {
-      for (const rootNode of nodes) {
-        if (rootNode.children) {
-          for (const node of rootNode.children) {
-            if (node.title === "Bookmarks Bar") {
-              return node.id!;
-            }
-          }
-        }
-      }
-      return null;
-    };
-
-    return findBookmarksBar(bookmarkTree);
-  }
-
   // Create a new folder
   function createFolder(name: string) {
-    const parentId = getDefaultParentId();
+    const parentId = getBookmarksBarId(bookmarkTree);
     if (parentId) {
       chrome.bookmarks
         .create({
@@ -466,7 +370,7 @@ function App() {
 
   // Rename a folder
   function renameFolder(oldName: string, newName: string) {
-    const folderId = getFolderId(oldName);
+    const folderId = getFolderId(oldName, bookmarkTree);
     if (folderId) {
       chrome.bookmarks
         .update(folderId, {
@@ -494,29 +398,17 @@ function App() {
   function moveBookmark(bookmarkId: string, targetFolderName: string) {
     let parentId: string | null = null;
 
-    if (
-      targetFolderName === "Bookmarks Bar" ||
-      targetFolderName === "Other Bookmarks"
-    ) {
-      // Moving to root level
-      const findRootFolder = (
-        nodes: chrome.bookmarks.BookmarkTreeNode[]
-      ): string | null => {
-        for (const rootNode of nodes) {
-          if (rootNode.children) {
-            for (const node of rootNode.children) {
-              if (node.title === targetFolderName) {
-                return node.id!;
-              }
-            }
-          }
-        }
-        return null;
-      };
-      parentId = findRootFolder(bookmarkTree);
+    // Check if it's a special folder by folderType
+    const specialFolders = getSpecialFolders(bookmarkTree);
+    const specialFolder = specialFolders.find(
+      (f) => f.name === targetFolderName
+    );
+
+    if (specialFolder) {
+      parentId = specialFolder.id;
     } else {
-      // Moving to a specific folder
-      parentId = getFolderId(targetFolderName);
+      // Regular user folder
+      parentId = getFolderId(targetFolderName, bookmarkTree);
     }
 
     if (parentId) {
@@ -551,15 +443,17 @@ function App() {
                 <TabsList>
                   <TabsTrigger value="All">All</TabsTrigger>
                   {bookmarkFolders.map((folder) => (
-                    <ContextMenu key={folder}>
+                    <ContextMenu key={`${folder.name}-${folder.syncing}`}>
                       <ContextMenuTrigger asChild>
-                        <TabsTrigger value={folder}>{folder}</TabsTrigger>
+                        <TabsTrigger value={folder.name}>
+                          {folder.name}
+                        </TabsTrigger>
                       </ContextMenuTrigger>
                       <ContextMenuContent>
                         <ContextMenuItem
                           onSelect={() => {
-                            setRenamingFolder(folder);
-                            setNewFolderName(folder);
+                            setRenamingFolder(folder.name);
+                            setNewFolderName(folder.name);
                             setRenameFolderDialogOpen(true);
                           }}
                         >
@@ -787,11 +681,21 @@ function App() {
                       value={selectedFolder}
                       onChange={(e) => setSelectedFolder(e.target.value)}
                     >
-                      <option value="Other Bookmarks">Other Bookmarks</option>
-                      <option value="Bookmarks Bar">Bookmarks Bar</option>
+                      {getSpecialFolders(bookmarkTree).map((folder) => (
+                        <option key={folder.id} value={folder.folderType}>
+                          {folder.name}
+                          {folder.syncing !== undefined &&
+                            (folder.syncing ? " (Synced)" : " (Local)")}
+                        </option>
+                      ))}
                       {bookmarkFolders.map((folder) => (
-                        <option key={folder} value={folder}>
-                          {folder}
+                        <option
+                          key={`${folder.name}-${folder.syncing}`}
+                          value={folder.name}
+                        >
+                          {folder.name}
+                          {folder.syncing !== undefined &&
+                            (folder.syncing ? " (Synced)" : " (Local)")}
                         </option>
                       ))}
                     </select>
@@ -811,32 +715,22 @@ function App() {
                         fixedUrlValue = `https://${urlValue}`;
                       }
 
-                      // Determine the parent folder ID
+                      // Determine the parent folder ID using folderType
                       let parentId: string | null = null;
+
+                      // Check if selectedFolder is a folderType (special folder)
                       if (
-                        selectedFolder === "" ||
-                        selectedFolder === "Bookmarks Bar"
+                        selectedFolder === "bookmarks-bar" ||
+                        selectedFolder === "other" ||
+                        selectedFolder === "mobile"
                       ) {
-                        parentId = getDefaultParentId(); // Bookmarks Bar
-                      } else if (selectedFolder === "Other Bookmarks") {
-                        // Find Other Bookmarks ID
-                        const findOtherBookmarks = (
-                          nodes: chrome.bookmarks.BookmarkTreeNode[]
-                        ): string | null => {
-                          for (const rootNode of nodes) {
-                            if (rootNode.children) {
-                              for (const node of rootNode.children) {
-                                if (node.title === "Other Bookmarks") {
-                                  return node.id!;
-                                }
-                              }
-                            }
-                          }
-                          return null;
-                        };
-                        parentId = findOtherBookmarks(bookmarkTree);
+                        parentId = getFolderByType(
+                          selectedFolder,
+                          bookmarkTree
+                        );
                       } else {
-                        parentId = getFolderId(selectedFolder);
+                        // Regular user folder
+                        parentId = getFolderId(selectedFolder, bookmarkTree);
                       }
 
                       const bookmarkData: {
@@ -1309,11 +1203,21 @@ function App() {
                 value={selectedFolder}
                 onChange={(e) => setSelectedFolder(e.target.value)}
               >
-                <option value="Other Bookmarks">Other Bookmarks</option>
-                <option value="Bookmarks Bar">Bookmarks Bar</option>
+                {getSpecialFolders(bookmarkTree).map((folder) => (
+                  <option key={folder.id} value={folder.name}>
+                    {folder.name}
+                    {folder.syncing !== undefined &&
+                      (folder.syncing ? " (Synced)" : " (Local)")}
+                  </option>
+                ))}
                 {bookmarkFolders.map((folder) => (
-                  <option key={folder} value={folder}>
-                    {folder}
+                  <option
+                    key={`${folder.name}-${folder.syncing}`}
+                    value={folder.name}
+                  >
+                    {folder.name}
+                    {folder.syncing !== undefined &&
+                      (folder.syncing ? " (Synced)" : " (Local)")}
                   </option>
                 ))}
               </select>
