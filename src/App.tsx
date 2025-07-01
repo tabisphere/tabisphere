@@ -23,6 +23,7 @@ import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
 
 import {
   Check,
+  Copy,
   FolderOpen,
   ListIcon,
   PencilIcon,
@@ -965,6 +966,22 @@ function App() {
                           >
                             <FolderOpen className="size-4" />
                             Move to folder
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={async () => {
+                              try {
+                                await navigator.clipboard.writeText(
+                                  bookmark.url!
+                                );
+                                toast("Link copied to clipboard");
+                              } catch {
+                                toast("Failed to copy link", {
+                                  description: "Unable to access clipboard",
+                                });
+                              }
+                            }}
+                          >
+                            <Copy className="size-4" /> Copy link
                           </ContextMenuItem>
                           <ContextMenuItem
                             onSelect={async () => {
